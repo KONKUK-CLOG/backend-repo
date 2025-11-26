@@ -40,7 +40,7 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(name = "social_id", nullable = false)
+    @Column(name = "social_id", nullable = false, unique = true)
     private String socialId;
 
     @Column(name = "password_hash", nullable = false)
@@ -62,12 +62,15 @@ public class User extends BaseTimeEntity {
     private final List<Comment> comments = new ArrayList<>();
 
     @Builder
-    private User(String name, String nickname, String email, String socialId, String passwordHash) {
+    private User(String name, String nickname, String email, String socialId, String passwordHash,
+            String githubAccessTokenEncrypted, LocalDateTime githubTokenExpiresAt) {
         this.name = name;
         this.nickname = nickname;
         this.email = email;
         this.socialId = socialId;
         this.passwordHash = passwordHash;
+        this.githubAccessTokenEncrypted = githubAccessTokenEncrypted;
+        this.githubTokenExpiresAt = githubTokenExpiresAt;
     }
 
     public void updateGithubToken(String encryptedToken, LocalDateTime expiresAt) {

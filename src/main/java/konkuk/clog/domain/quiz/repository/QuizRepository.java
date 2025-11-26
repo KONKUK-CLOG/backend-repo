@@ -7,3 +7,4 @@ public interface QuizRepository extends JpaRepository<Quiz, Long> {
 }
 
 
+

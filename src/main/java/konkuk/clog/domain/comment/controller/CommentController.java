@@ -28,7 +28,7 @@ public class CommentController {
 
     @PostMapping
     public ApiResponse<CommentResponse> createComment(
-            @RequestHeader(USER_HEADER) Long userId,
+            @RequestHeader(value = USER_HEADER, required = false) Long userId,
             @Valid @RequestBody CommentCreateRequest request) {
         return ApiResponse.success(commentService.createComment(userId, request));
     }
@@ -54,5 +54,6 @@ public class CommentController {
         return ApiResponse.success(commentService.getCommentsByBlog(blogId));
     }
 }
+
 
 

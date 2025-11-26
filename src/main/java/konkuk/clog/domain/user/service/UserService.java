@@ -8,6 +8,7 @@ import konkuk.clog.domain.user.repository.UserRepository;
 import konkuk.clog.global.exception.BusinessException;
 import konkuk.clog.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public UserResponse registerUser(UserCreateRequest request) {
@@ -29,13 +31,17 @@ public class UserService {
                     throw new BusinessException(ErrorCode.DUPLICATE_NICKNAME);
                 });
 
+        userRepository.findBySocialId(request.getSocialId())
+                .ifPresent(user -> {
+                    throw new BusinessException(ErrorCode.DUPLICATE_SOCIAL_ID);
+                });
+
         User user = User.builder()
                 .name(request.getName())
                 .nickname(request.getNickname())
                 .email(request.getEmail())
                 .socialId(request.getSocialId())
-                // TODO: 비밀번호 해싱 전략을 적용하세요.
-                .passwordHash(request.getPassword())
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .build();
         return UserResponse.from(userRepository.save(user));
     }

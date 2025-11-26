@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import konkuk.clog.domain.blog.domain.Blog;
 import konkuk.clog.domain.blog.repository.BlogRepository;
+import konkuk.clog.domain.comment.domain.AuthorType;
 import konkuk.clog.domain.comment.domain.Comment;
 import konkuk.clog.domain.comment.dto.CommentCreateRequest;
 import konkuk.clog.domain.comment.dto.CommentResponse;
@@ -16,6 +17,7 @@ import konkuk.clog.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -27,11 +29,15 @@ public class CommentService {
 
     @Transactional
     public CommentResponse createComment(Long userId, CommentCreateRequest request) {
-        User user = getUser(userId);
         Blog blog = getBlog(request.getBlogId());
+
+        User user = resolveAuthor(userId, request.getAuthorType());
+        String guestNickname = resolveGuestNickname(request);
 
         Comment comment = Comment.builder()
                 .author(user)
+                .authorType(request.getAuthorType())
+                .guestNickname(guestNickname)
                 .blog(blog)
                 .content(request.getContent())
                 .build();
@@ -78,10 +84,34 @@ public class CommentService {
     }
 
     private void validateAuthor(Long userId, Comment comment) {
-        if (!comment.getAuthor().getId().equals(userId)) {
+        if (comment.isGuestAuthor()) {
+            throw new BusinessException(ErrorCode.INVALID_AUTHOR_TYPE);
+        }
+        if (comment.getAuthor() == null || !comment.getAuthor().getId().equals(userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN_OPERATION);
         }
     }
+
+    private User resolveAuthor(Long userId, AuthorType authorType) {
+        if (AuthorType.GUEST.equals(authorType)) {
+            return null;
+        }
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.MISSING_USER_ID_FOR_COMMENT);
+        }
+        return getUser(userId);
+    }
+
+    private String resolveGuestNickname(CommentCreateRequest request) {
+        if (request.isGuestComment()) {
+            if (!StringUtils.hasText(request.getGuestNickname())) {
+                throw new BusinessException(ErrorCode.GUEST_NICKNAME_REQUIRED);
+            }
+            return request.getGuestNickname();
+        }
+        return null;
+    }
 }
+
 
 

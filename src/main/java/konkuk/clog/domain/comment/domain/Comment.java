@@ -2,6 +2,8 @@ package konkuk.clog.domain.comment.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -33,21 +35,35 @@ public class Comment extends BaseTimeEntity {
     private Blog blog;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id")
     private User author;
 
-    @Column(name = "comment_content", length = 1000)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "author_type", nullable = false, length = 20)
+    private AuthorType authorType;
+
+    @Column(name = "guest_nick_name", length = 50)
+    private String guestNickname;
+
+    @Column(name = "comment_content", nullable = false, length = 1000)
     private String content;
 
     @Builder
-    private Comment(Blog blog, User author, String content) {
+    private Comment(Blog blog, User author, AuthorType authorType, String guestNickname,
+            String content) {
         this.blog = blog;
         this.author = author;
+        this.authorType = authorType;
+        this.guestNickname = guestNickname;
         this.content = content;
     }
 
     public void updateContent(String content) {
         this.content = content;
+    }
+
+    public boolean isGuestAuthor() {
+        return AuthorType.GUEST.equals(this.authorType);
     }
 }
 
