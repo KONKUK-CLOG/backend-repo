@@ -75,8 +75,13 @@ public class GithubOAuthService {
                 var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 @SuppressWarnings("unchecked")
                 Map<String, Object> map = mapper.readValue(body, Map.class);
+                if (map.containsKey("error") || map.containsKey("error_description")) {
+                    throw new BusinessException(ErrorCode.GITHUB_AUTH_FAILED);
+                }
                 Object at = map.get("access_token");
                 return at != null ? at.toString() : null;
+            } catch (BusinessException e) {
+                throw e;
             } catch (Exception e) {
                 return null;
             }

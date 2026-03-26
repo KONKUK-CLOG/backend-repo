@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -19,7 +20,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
- * JWT 기반 stateless 보안, CORS, 공개 API 화이트리스트.
+ * JWT 기반 stateless 보안, CORS(허용 출처 화이트리스트), 보안 헤더, 공개 API 정책.
  */
 @Configuration
 @RequiredArgsConstructor
@@ -34,26 +35,32 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, SecurityProperties securityProperties)
+            throws Exception {
         JwtAuthenticationFilter jwtFilter =
                 new JwtAuthenticationFilter(jwtTokenProvider, userRepository);
 
         http
                 .csrf(csrf -> csrf.disable())
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource(securityProperties)))
                 .sessionManagement(sess ->
                         sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny())
+                        .contentTypeOptions(Customizer.withDefaults()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/blogs/published").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/blogs/users/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/blogs/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/blogs/*/view").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/comments/blog/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/comments").permitAll()
-                        .requestMatchers("/api/quizzes/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/quizzes/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/quizzes").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/quizzes/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/quizzes/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
@@ -62,21 +69,22 @@ public class SecurityConfig {
     }
 
     /**
-     * Extension(로컬), 웹 프론트(별도 포트)에서 Bearer JWT 로 호출할 수 있도록 허용.
-     * 배포 시 실제 오리진으로 좁히는 것을 권장한다.
+     * Bearer JWT 만 사용하므로 {@code Allow-Credentials: false} 로 CSRF/CORS 결합 위험을 줄인다.
+     * 허용 Origin 은 {@link SecurityProperties#corsAllowedOrigins} 로만 제한(와일드카드 https://* 금지).
      */
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(SecurityProperties securityProperties) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of(
-                "http://localhost:*",
-                "http://127.0.0.1:*",
-                "https://*"
-        ));
+        List<String> origins = securityProperties.parsedCorsOrigins();
+        if (origins.isEmpty()) {
+            origins = List.of("http://localhost:3000", "http://localhost:5173");
+        }
+        config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true);
         config.setExposedHeaders(List.of("Authorization"));
+        config.setAllowCredentials(false);
+        config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;

@@ -2,49 +2,22 @@ package konkuk.clog.domain.user.service;
 
 import konkuk.clog.domain.user.domain.User;
 import konkuk.clog.domain.user.dto.GithubTokenUpdateRequest;
-import konkuk.clog.domain.user.dto.UserCreateRequest;
 import konkuk.clog.domain.user.dto.UserResponse;
 import konkuk.clog.domain.user.repository.UserRepository;
 import konkuk.clog.global.exception.BusinessException;
 import konkuk.clog.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 본인 프로필·GitHub 토큰·탈퇴 — 가입은 {@link konkuk.clog.domain.user.service.AuthService}(GitHub OAuth) 전용.
+ */
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-
-    @Transactional
-    public UserResponse registerUser(UserCreateRequest request) {
-        userRepository.findByEmail(request.getEmail())
-                .ifPresent(user -> {
-                    throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
-                });
-
-        userRepository.findByNickname(request.getNickname())
-                .ifPresent(user -> {
-                    throw new BusinessException(ErrorCode.DUPLICATE_NICKNAME);
-                });
-
-        userRepository.findBySocialId(request.getSocialId())
-                .ifPresent(user -> {
-                    throw new BusinessException(ErrorCode.DUPLICATE_SOCIAL_ID);
-                });
-
-        User user = User.builder()
-                .name(request.getName())
-                .nickname(request.getNickname())
-                .email(request.getEmail())
-                .socialId(request.getSocialId())
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .build();
-        return UserResponse.from(userRepository.save(user));
-    }
 
     @Transactional
     public void updateGithubToken(Long userId, GithubTokenUpdateRequest request) {
@@ -74,4 +47,3 @@ public class UserService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 }
-

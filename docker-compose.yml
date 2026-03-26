@@ -1,15 +1,18 @@
-# 로컬 개발: MongoDB + (선택) API 컨테이너. MySQL 은 RDS 등 외부 연결.
+# 로컬: MongoDB + API (기본 프로파일 dev — application-dev.properties)
+# 운영 배포 시 SPRING_PROFILES_ACTIVE=prod 및 시크릿은 호스트/오케스트레이션 환경 변수로만 주입
 services:
   clog-api:
     build: .
     ports:
       - "8080:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: dev
       MONGODB_URI: mongodb://mongo:27017/clog
       MONGODB_DATABASE: clog
       AWS_LAMBDA_FUNCTION_NAME: ${AWS_LAMBDA_FUNCTION_NAME:-clog-llm-generator}
       AWS_REGION: ${AWS_REGION:-ap-northeast-2}
-      JWT_SECRET: ${JWT_SECRET:-clog-jwt-secret-key-must-be-at-least-32-bytes-long}
+      # 컨테이너에서 호스트 MySQL 쓰려면: DB_HOST=host.docker.internal (Windows/Mac Docker Desktop)
+      DB_HOST: ${DB_HOST:-host.docker.internal}
     depends_on:
       - mongo
 

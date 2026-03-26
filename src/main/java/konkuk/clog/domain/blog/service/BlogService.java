@@ -125,28 +125,74 @@ public class BlogService {
         return blogId == null ? base : base + "/" + blogId;
     }
 
+    /**
+     * 조회수 증가 — 익명 호출 가능하므로 공개·링크 공개 글만 허용(비공개 글 조회수 스팸 방지).
+     */
     @Transactional
     public void increaseViewCount(Long blogId) {
         Blog blog = getBlog(blogId);
+        if (blog.getStatus() != BlogStatus.PUBLISHED) {
+            throw new BusinessException(ErrorCode.BLOG_NOT_FOUND);
+        }
+        if (blog.getVisibility() == BlogVisibility.PRIVATE) {
+            throw new BusinessException(ErrorCode.BLOG_NOT_FOUND);
+        }
         blog.increaseViewCount();
     }
 
-    @Transactional(readOnly = true)
-    public BlogResponse getBlogDetail(Long blogId) {
-        return BlogResponse.from(getBlog(blogId));
+    private boolean canViewBlog(Blog blog, Long viewerUserId) {
+        if (blog.getStatus() == BlogStatus.DELETED) {
+            return false;
+        }
+        Long authorId = blog.getAuthor().getId();
+        if (blog.getStatus() == BlogStatus.DRAFT) {
+            return viewerUserId != null && authorId.equals(viewerUserId);
+        }
+        if (blog.getStatus() == BlogStatus.PUBLISHED) {
+            if (blog.getVisibility() == BlogVisibility.PUBLIC
+                    || blog.getVisibility() == BlogVisibility.LINKED) {
+                return true;
+            }
+            return viewerUserId != null && authorId.equals(viewerUserId);
+        }
+        return false;
     }
 
+    /**
+     * 블로그 단건 조회 — 비공개·초안·삭제 글은 작성자만 조회 가능(그 외에는 404 로 응답해 존재 여부 유출을 줄임).
+     */
     @Transactional(readOnly = true)
-    public List<BlogSummaryResponse> getUserBlogs(Long userId) {
-        User user = getUser(userId);
-        return blogRepository.findAllByAuthor(user).stream()
+    public BlogResponse getBlogDetail(Long blogId, Long viewerUserId) {
+        Blog blog = getBlog(blogId);
+        if (!canViewBlog(blog, viewerUserId)) {
+            throw new BusinessException(ErrorCode.BLOG_NOT_FOUND);
+        }
+        return BlogResponse.from(blog);
+    }
+
+    /**
+     * 특정 사용자의 글 목록 — 본인이면 전체, 타인이면 공개(PUBLIC)·발행된 글만.
+     */
+    @Transactional(readOnly = true)
+    public List<BlogSummaryResponse> getUserBlogsForProfile(Long profileUserId, Long viewerUserId) {
+        User author = getUser(profileUserId);
+        if (viewerUserId != null && viewerUserId.equals(profileUserId)) {
+            return blogRepository.findAllByAuthor(author).stream()
+                    .map(BlogSummaryResponse::from)
+                    .collect(Collectors.toList());
+        }
+        return blogRepository
+                .findAllByAuthorAndStatusAndVisibility(author, BlogStatus.PUBLISHED, BlogVisibility.PUBLIC)
+                .stream()
                 .map(BlogSummaryResponse::from)
                 .collect(Collectors.toList());
     }
 
+    /** 메인 피드 — 전체 공개(PUBLIC) 발행 글만 (비공개·링크 전용 제외). */
     @Transactional(readOnly = true)
     public List<BlogSummaryResponse> getPublishedBlogs() {
         return blogRepository.findAllByStatus(BlogStatus.PUBLISHED).stream()
+                .filter(b -> b.getVisibility() == BlogVisibility.PUBLIC)
                 .map(BlogSummaryResponse::from)
                 .collect(Collectors.toList());
     }
