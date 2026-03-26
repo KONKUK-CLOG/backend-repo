@@ -19,6 +19,27 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/*
+```mermaid
+classDiagram
+    class Blog
+    class User
+    class Comment {
+        +Long id
+        +AuthorType authorType
+        +String guestNickname
+        +String content
+    }
+    class AuthorType {
+        <<enumeration>>
+        GUEST
+        USER
+    }
+
+    Blog "1" <-- "many" Comment : blog
+    User "1" <-- "many" Comment : author
+```
+*/
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "comments")
