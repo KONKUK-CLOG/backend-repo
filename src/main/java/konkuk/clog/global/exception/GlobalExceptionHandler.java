@@ -2,6 +2,8 @@ package konkuk.clog.global.exception;
 
 import konkuk.clog.global.dto.ApiResponse;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -26,10 +28,21 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.failure(message));
     }
 
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex) {
+        return ResponseEntity.status(ErrorCode.UNAUTHORIZED.getStatus())
+                .body(ApiResponse.failure(ErrorCode.UNAUTHORIZED.getMessage()));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+        return ResponseEntity.status(ErrorCode.FORBIDDEN_OPERATION.getStatus())
+                .body(ApiResponse.failure(ErrorCode.FORBIDDEN_OPERATION.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(Exception ex) {
         return ResponseEntity.internalServerError()
                 .body(ApiResponse.failure("예상치 못한 오류가 발생했습니다."));
     }
 }
-

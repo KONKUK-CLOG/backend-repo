@@ -19,7 +19,13 @@ public enum ErrorCode {
     SOCIAL_EMAIL_REQUIRED(HttpStatus.BAD_REQUEST, "SOCIAL_EMAIL_REQUIRED", "깃허브 계정의 이메일 조회에 실패했습니다."),
     MISSING_USER_ID_FOR_COMMENT(HttpStatus.BAD_REQUEST, "MISSING_USER_ID_FOR_COMMENT", "로그인 사용자가 필요한 요청입니다."),
     INVALID_AUTHOR_TYPE(HttpStatus.BAD_REQUEST, "INVALID_AUTHOR_TYPE", "지원하지 않는 작성자 유형입니다."),
-    GUEST_NICKNAME_REQUIRED(HttpStatus.BAD_REQUEST, "GUEST_NICKNAME_REQUIRED", "게스트 닉네임을 입력해주세요.");
+    GUEST_NICKNAME_REQUIRED(HttpStatus.BAD_REQUEST, "GUEST_NICKNAME_REQUIRED", "게스트 닉네임을 입력해주세요."),
+
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "인증이 필요합니다."),
+    LLM_INVOCATION_FAILED(HttpStatus.BAD_GATEWAY, "LLM_INVOCATION_FAILED", "LLM 호출에 실패했습니다."),
+    LLM_RESPONSE_PARSE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "LLM_RESPONSE_PARSE_FAILED", "LLM 응답을 해석할 수 없습니다."),
+    CHAT_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "CHAT_SESSION_NOT_FOUND", "채팅 세션을 찾을 수 없습니다."),
+    CHAT_CONTEXT_OVERFLOW(HttpStatus.BAD_REQUEST, "CHAT_CONTEXT_OVERFLOW", "채팅 컨텍스트 한도를 초과했습니다.");
 
     private final HttpStatus status;
     private final String code;
@@ -31,4 +37,3 @@ public enum ErrorCode {
         this.message = message;
     }
 }
-

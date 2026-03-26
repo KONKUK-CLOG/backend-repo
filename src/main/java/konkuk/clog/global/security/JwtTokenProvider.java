@@ -1,77 +1,71 @@
 package konkuk.clog.global.security;
 
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
-import java.util.List;
 import javax.crypto.SecretKey;
+import konkuk.clog.domain.user.domain.User;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.stereotype.Component;
 
+/**
+ * JWT 생성·검증 (jjwt 0.12.x — {@code signWith(SecretKey)}, {@code verifyWith(SecretKey)}).
+ */
 @Component
 public class JwtTokenProvider {
 
-    private final String secret;
-    private final long expiration;
-    private final SecretKey secretKey;
+    @Value("${jwt.secret}")
+    private String secretKey;
 
-    public JwtTokenProvider(@Value("${jwt.secret}") String secret, @Value("${jwt.expiration}") long expiration) {
-        this.secret = secret;
-        this.expiration = expiration;
-        this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    @Value("${jwt.expiration-ms:3600000}")
+    private long expirationMs;
+
+    public String generateToken(User user) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + expirationMs);
+        return Jwts.builder()
+                .subject(String.valueOf(user.getId()))
+                .claim("nickname", user.getNickname())
+                .claim("email", user.getEmail())
+                .issuedAt(now)
+                .expiration(expiry)
+                .signWith(signingKey())
+                .compact();
     }
 
-    public String createToken(Long userId, String email) {
-        Date now = new Date();
-        Date validity = new Date(now.getTime() + expiration);
-
-        return Jwts.builder()
-                .subject(String.valueOf(userId))
-                .claim("email", email)
-                .issuedAt(now)
-                .expiration(validity)
-                .signWith(secretKey)
-                .compact();
+    public Long getUserId(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(signingKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        return Long.valueOf(claims.getSubject());
     }
 
     public boolean validateToken(String token) {
         try {
-            parseClaims(token);
+            Jwts.parser()
+                    .verifyWith(signingKey())
+                    .build()
+                    .parseSignedClaims(token);
             return true;
-        } catch (JwtException | IllegalArgumentException e) {
+        } catch (Exception e) {
             return false;
         }
     }
 
-    public Authentication getAuthentication(String token) {
-        Claims claims = parseClaims(token);
-        List<GrantedAuthority> authorities = Collections.emptyList();
-
-        User principal = new User(claims.getSubject(), "", authorities);
-        return new UsernamePasswordAuthenticationToken(principal, token, authorities);
-    }
-
-    private Claims parseClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
-    }
-
-    public long getExpiration() {
-        return expiration;
-    }
-
-    public String getSecret() {
-        return secret;
+    /** 설정 문자열을 SHA-256 으로 고정 길이 키로 만들어 HMAC-SHA256 에 사용한다. */
+    private SecretKey signingKey() {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] keyBytes = digest.digest(secretKey.getBytes(StandardCharsets.UTF_8));
+            return Keys.hmacShaKeyFor(keyBytes);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }
