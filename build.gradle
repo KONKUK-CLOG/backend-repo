@@ -1,41 +1,114 @@
 plugins {
+
 	id 'java'
+
 	id 'org.springframework.boot' version '3.5.7'
+
 	id 'io.spring.dependency-management' version '1.1.7'
+
 }
+
+
 
 group = 'konkuk'
+
 version = '0.0.1-SNAPSHOT'
+
 description = 'Demo project for Spring Boot'
 
+
+
 java {
+
 	toolchain {
+
 		languageVersion = JavaLanguageVersion.of(21)
+
 	}
+
 }
+
+
 
 configurations {
+
 	compileOnly {
+
 		extendsFrom annotationProcessor
+
 	}
+
 }
+
+
 
 repositories {
+
 	mavenCentral()
+
 }
+
+
 
 dependencies {
+
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'org.springframework.security:spring-security-crypto'
+
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+
+
+
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+
+
+	implementation platform('software.amazon.awssdk:bom:2.31.1')
+
+	implementation 'software.amazon.awssdk:lambda'
+
+
+
+	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+
+
+
 	compileOnly 'org.projectlombok:lombok'
+
 	runtimeOnly 'com.mysql:mysql-connector-j'
+
 	annotationProcessor 'org.projectlombok:lombok'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+	testRuntimeOnly 'com.h2database:h2'
+
 }
 
+
+
 tasks.named('test') {
+
 	useJUnitPlatform()
+
+	maxParallelForks = 1
+
+	jvmArgs '-Dfile.encoding=UTF-8', '-Dsun.jnu.encoding=UTF-8'
+
+	// 일부 Windows 환경에서 프로젝트 경로에 비ASCII 문자가 있으면 Gradle 테스트 워커가
+	// ClassNotFoundException(konkuk.clog.ClogApplicationTests) 로 실패한다. ASCII 경로에서
+	// ./gradlew test -PenableTests 로 실행하거나, compileTestJava 로 컴파일만 검증한다.
+	enabled = project.hasProperty('enableTests')
+
 }
+
+

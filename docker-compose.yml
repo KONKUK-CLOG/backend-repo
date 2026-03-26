@@ -1,0 +1,24 @@
+# 로컬 개발: MongoDB + (선택) API 컨테이너. MySQL 은 RDS 등 외부 연결.
+services:
+  clog-api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/clog
+      MONGODB_DATABASE: clog
+      AWS_LAMBDA_FUNCTION_NAME: ${AWS_LAMBDA_FUNCTION_NAME:-clog-llm-generator}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      JWT_SECRET: ${JWT_SECRET:-clog-jwt-secret-key-must-be-at-least-32-bytes-long}
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:

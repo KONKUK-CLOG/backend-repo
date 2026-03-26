@@ -70,6 +70,22 @@ public class Blog extends BaseTimeEntity {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    /** Extension/Lambda 생성 시 diff 원본(선택). */
+    @Column(name = "code_diff", columnDefinition = "TEXT")
+    private String codeDiff;
+
+    /** 첨부 코드 맥락(파일·라인 등 텍스트). */
+    @Column(name = "code_context", columnDefinition = "TEXT")
+    private String codeContext;
+
+    /** 유저 프롬프트 원문. */
+    @Column(columnDefinition = "TEXT")
+    private String prompt;
+
+    /** MongoDB 채팅 세션 ObjectId 문자열. */
+    @Column(name = "chat_session_id", length = 32)
+    private String chatSessionId;
+
     @OneToMany(mappedBy = "blog", cascade = CascadeType.ALL, orphanRemoval = true)
     private final List<Comment> comments = new ArrayList<>();
 
@@ -78,7 +94,8 @@ public class Blog extends BaseTimeEntity {
 
     @Builder
     private Blog(User author, String title, String content, BlogStatus status,
-            BlogVisibility visibility, String ogTitle, String ogBlogUrl) {
+            BlogVisibility visibility, String ogTitle, String ogBlogUrl,
+            String codeDiff, String codeContext, String prompt, String chatSessionId) {
         this.author = author;
         this.title = title;
         this.content = content;
@@ -86,6 +103,10 @@ public class Blog extends BaseTimeEntity {
         this.visibility = visibility != null ? visibility : BlogVisibility.PUBLIC;
         this.ogTitle = ogTitle;
         this.ogBlogUrl = ogBlogUrl;
+        this.codeDiff = codeDiff;
+        this.codeContext = codeContext;
+        this.prompt = prompt;
+        this.chatSessionId = chatSessionId;
         this.viewCount = 0L;
     }
 

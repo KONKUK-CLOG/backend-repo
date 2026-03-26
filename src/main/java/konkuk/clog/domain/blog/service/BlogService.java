@@ -3,6 +3,8 @@ package konkuk.clog.domain.blog.service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
+import konkuk.clog.domain.blog.dto.BlogPublishRequest;
+import konkuk.clog.domain.blog.dto.BlogPublishResponse;
 import konkuk.clog.domain.blog.domain.Blog;
 import konkuk.clog.domain.blog.domain.BlogStatus;
 import konkuk.clog.domain.blog.domain.BlogVisibility;
@@ -16,6 +18,7 @@ import konkuk.clog.domain.user.repository.UserRepository;
 import konkuk.clog.global.exception.BusinessException;
 import konkuk.clog.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +28,9 @@ public class BlogService {
 
     private final BlogRepository blogRepository;
     private final UserRepository userRepository;
+
+    @Value("${app.blog.public-base-url:http://localhost:3000/blog}")
+    private String publicBlogBaseUrl;
 
     @Transactional
     public BlogResponse createBlog(Long userId, BlogCreateRequest request) {
@@ -82,6 +88,41 @@ public class BlogService {
         Blog blog = getBlog(blogId);
         validateAuthor(userId, blog);
         blog.publish(LocalDateTime.now());
+    }
+
+    /**
+     * VS Code Extension 발행 전용 — DRAFT 없이 즉시 {@link BlogStatus#PUBLISHED} 및 공개 URL 반환.
+     */
+    @Transactional
+    public BlogPublishResponse publishFromExtension(Long userId, BlogPublishRequest request) {
+        User author = getUser(userId);
+        LocalDateTime now = LocalDateTime.now();
+        Blog blog = Blog.builder()
+                .author(author)
+                .title(request.getTitle())
+                .content(request.getContent())
+                .status(BlogStatus.DRAFT)
+                .visibility(request.getVisibility())
+                .ogTitle(request.getTitle())
+                .ogBlogUrl(null)
+                .codeDiff(request.getCodeDiff())
+                .codeContext(request.getCodeContext())
+                .prompt(request.getPrompt())
+                .chatSessionId(request.getChatSessionId())
+                .build();
+        blog.publish(now);
+        blog = blogRepository.save(blog);
+        String url = buildPublicBlogUrl(blog.getId());
+        blog.update(request.getTitle(), request.getContent(), BlogStatus.PUBLISHED, request.getVisibility(),
+                request.getTitle(), url);
+        return new BlogPublishResponse(blog.getId(), url);
+    }
+
+    private String buildPublicBlogUrl(Long blogId) {
+        String base = publicBlogBaseUrl.endsWith("/")
+                ? publicBlogBaseUrl.substring(0, publicBlogBaseUrl.length() - 1)
+                : publicBlogBaseUrl;
+        return blogId == null ? base : base + "/" + blogId;
     }
 
     @Transactional
