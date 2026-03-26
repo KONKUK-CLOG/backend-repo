@@ -35,3 +35,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# 로컬 시크릿 (환경 변수 대체)
+.env
+.env.*

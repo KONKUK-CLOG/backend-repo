@@ -1,13 +1,14 @@
 package konkuk.clog;
 
 import konkuk.clog.domain.user.github.GithubOAuthProperties;
+import konkuk.clog.global.config.SecurityProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
 
 @SpringBootApplication
-@EnableConfigurationProperties(GithubOAuthProperties.class)
+@EnableConfigurationProperties({GithubOAuthProperties.class, SecurityProperties.class})
 @EnableMongoRepositories(basePackages = "konkuk.clog.domain.chat.repository")
 public class ClogApplication {
 
