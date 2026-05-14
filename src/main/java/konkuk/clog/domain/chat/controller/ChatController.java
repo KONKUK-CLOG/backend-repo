@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -28,9 +29,10 @@ public class ChatController {
     private final ChatService chatService;
 
     @GetMapping("/history")
-    public ApiResponse<ChatHistoryResponse> history() {
+    public ApiResponse<ChatHistoryResponse> history(
+            @RequestParam(required = false) String projectId) {
         Long userId = SecurityUtils.requireCurrentUserId();
-        return ApiResponse.success(chatService.loadActiveHistory(userId));
+        return ApiResponse.success(chatService.loadActiveHistory(userId, projectId));
     }
 
     /**

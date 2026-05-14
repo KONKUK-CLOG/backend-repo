@@ -25,7 +25,13 @@ public enum ErrorCode {
     LLM_INVOCATION_FAILED(HttpStatus.BAD_GATEWAY, "LLM_INVOCATION_FAILED", "LLM 호출에 실패했습니다."),
     LLM_RESPONSE_PARSE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "LLM_RESPONSE_PARSE_FAILED", "LLM 응답을 해석할 수 없습니다."),
     CHAT_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "CHAT_SESSION_NOT_FOUND", "채팅 세션을 찾을 수 없습니다."),
-    CHAT_CONTEXT_OVERFLOW(HttpStatus.BAD_REQUEST, "CHAT_CONTEXT_OVERFLOW", "채팅 컨텍스트 한도를 초과했습니다.");
+    CHAT_CONTEXT_OVERFLOW(HttpStatus.BAD_REQUEST, "CHAT_CONTEXT_OVERFLOW", "채팅 컨텍스트 한도를 초과했습니다."),
+    PROJECT_NOT_FOUND(HttpStatus.NOT_FOUND, "PROJECT_NOT_FOUND", "존재하지 않는 프로젝트입니다."),
+    PROJECT_FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "PROJECT_FILE_NOT_FOUND", "존재하지 않는 프로젝트 파일입니다."),
+    PROJECT_FILE_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "PROJECT_FILE_LIMIT_EXCEEDED", "프로젝트당 파일 개수 한도를 초과했습니다."),
+    PROJECT_FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "PROJECT_FILE_TOO_LARGE", "파일 크기가 허용 한도를 초과했습니다."),
+    DUPLICATE_PROJECT_FILE_PATH(HttpStatus.CONFLICT, "DUPLICATE_PROJECT_FILE_PATH", "같은 경로의 파일이 이미 있습니다."),
+    INVALID_PROJECT_FILE_PATH(HttpStatus.BAD_REQUEST, "INVALID_PROJECT_FILE_PATH", "유효하지 않은 파일 경로입니다.");
 
     private final HttpStatus status;
     private final String code;

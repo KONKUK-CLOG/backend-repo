@@ -16,7 +16,8 @@ import lombok.Setter;
  *   "userId": 123,
  *   "chatHistory": [...],
  *   "codeSnippets": [...],
- *   "prompt": "..."
+ *   "prompt": "...",
+ *   "projectFiles": [ { "filePath": "...", "language": "...", "content": "..." } ]
  * }
  * </pre>
  */
@@ -36,4 +37,7 @@ public class LambdaPayload {
     private List<CodeSnippet> codeSnippets;
 
     private String prompt;
+
+    /** GENERATE 시 프로젝트 스냅샷 — Lambda 가 무시해도 됨(@JsonIgnoreProperties). */
+    private List<ProjectFileContext> projectFiles;
 }

@@ -18,6 +18,9 @@ public class BlogGenerateRequest {
     /** 클라이언트가 알고 있는 세션 id(없으면 서버가 활성 세션 사용). */
     private String chatSessionId;
 
+    /** 프로젝트 단위 채팅 컨텍스트 — 채팅 API 와 동일. */
+    private String projectId;
+
     @NotBlank
     private String message;
 
