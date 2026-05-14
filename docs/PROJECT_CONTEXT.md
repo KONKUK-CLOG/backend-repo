@@ -362,6 +362,31 @@ event: error     → { "message": "..." }  (오류 시)
 
 ## 앞으로 해야 할 작업 체크리스트
 
+### 권장 작업 순서 (타임라인)
+
+아래는 **의존성과 리스크**를 줄이기 위한 권장 순서다. 항목 번호는 아래 체크리스트 섹션과 대응한다.
+
+| 순서 | 해야 할 일 | 비고 |
+|------|------------|------|
+| 0 | **보안·권한 점검** (PRIVATE 블로그 조회, 퀴즈 CUD 의도 확인) | 데이터 노출이면 “선택”이 아니라 최우선 |
+| 1 | **MongoDB 연동 검증** | 채팅·프로젝트 전반이 Atlas에 의존 |
+| 2 | **Lambda 단독 테스트** + (가능 시) **로컬/개발 PC에서 백엔드가 실제 `Invoke` 성공** | mock 테스트와 실제 AWS 자격·네트워크 간극 제거 |
+| 3 | **프론트**: OAuth 콜백 → JWT 저장 → `Bearer`로 단순 API 호출 | SSE보다 먼저 막히면 이후 작업이 공허함 |
+| 4 | **프론트**: `POST /api/chat/send` SSE (`fetch` + ReadableStream) | 기술 난이도·디버깅 비용이 큼 |
+| 5 | **통합 테스트** (OAuth → 채팅 SSE → Extension 등) | 스테이징 URL이 있으면 GitHub OAuth App에 미리 등록해 두면 좋음 |
+| 6 | **배포** (EC2 IAM, RDS SG, Atlas IP, `prod`, **HTTPS**) | 프로덕션 OAuth·CORS는 배포 URL·HTTPS 확정 후 최종 검증 |
+| 7 | **CORS·GitHub Redirect URI** 최종 반영 | `APP_CORS_ALLOWED_ORIGINS`와 OAuth App 설정 일치 |
+| 8 | Lambda 팀 **`projectFiles` 프롬프트 주입** 후 재통합 | 백엔드는 payload 주입 완료 상태 |
+| 9 | **기능 보강·운영 보강**(선택) | 데모에 필요하면 5~7단계 사이로 앞당김 |
+
+**OAuth·HTTPS 의존성**: GitHub OAuth는 등록된 Redirect URI와 실제 서비스 URL(스킴·호스트)이 일치해야 한다. HTTPS를 나중에 붙이면 **프로덕션 전체 로그인 플로우**는 그 시점까지 검증이 지연되므로, 가능하면 **스테이징 도메인을 먼저 정하고** OAuth App에 등록해 두는 것을 권장한다.
+
+### 보안·권한 (통합 테스트 전 권장)
+
+- [ ] 블로그 `GET /{blogId}`: `visibility=PRIVATE`일 때 **본인만** 조회 가능한지 서비스 레이어·응답 코드 확인 (URL이 `permitAll`이어도 내부에서 차단하는지 검증)
+- [ ] 퀴즈 생성·수정·삭제: `authenticated`만으로 충분한지, 관리자 전용이 필요한지 **제품 의도 확정** 후 필요 시 역할 분리
+- [ ] Extension·블로그·채팅에서 **민감 데이터**가 로그/에러 메시지에 남지 않도록 점검
+
 ### MongoDB 연동 검증
 
 - [ ] Atlas 클러스터 Resume 후 IP Access List에 EC2(서버)·개발 PC IP 추가
@@ -375,17 +400,25 @@ event: error     → { "message": "..." }  (오류 시)
 - [ ] Lambda 함수 AWS 콘솔 또는 AWS CLI로 **단독 테스트 이벤트** 실행
   - GENERATE 페이로드 예시로 `reasoning`, `markdown` 필드가 응답에 있는지 확인
   - SUMMARIZE 페이로드 예시로 `summary` 필드 확인
+- [ ] (권장) **백엔드 실행 환경**(로컬 AWS CLI 프로파일 또는 dev 서버)에서 실제 `lambda:InvokeFunction` 성공 여부 확인 — 단위 테스트 mock과 별개
 - [ ] Lambda 함수가 `projectFiles` 배열을 받아 프롬프트에 주입하는 로직 구현 (Lambda 팀)
 - [ ] Lambda IAM 역할 확인 (백엔드 EC2 인스턴스 역할에 `lambda:InvokeFunction` 권한)
 - [ ] Lambda 응답 타임아웃 설정 (SSE timeout 900초와 충돌하지 않도록)
+- [ ] (권장) **느린 응답·중간 연결 끊김** 시나리오: 클라이언트/프록시 타임아웃과 사용자 메시지(에러 이벤트) 동작 확인
 
 ### 프론트엔드 연동
 
 - [ ] **SSE 클라이언트 구현**: `POST /api/chat/send`는 `EventSource`가 아닌 `fetch` + ReadableStream으로 처리 (POST + Bearer header 필요)
 - [ ] `Authorization: Bearer <JWT>` 헤더 전송 확인
 - [ ] `POST /api/auth/github/callback?code=` 응답에서 `data.token` 추출 후 저장
+- [ ] JWT 만료(현재 1시간) 시 **재로그인 또는 갱신 UX** 합의 (리프레시 토큰 없으면 재인증 필요)
 - [ ] `projectId`를 채팅·블로그 생성 요청에 포함하는 UX 흐름 설계
 - [ ] CORS 오리진을 `APP_CORS_ALLOWED_ORIGINS`에 추가 (프론트 배포 URL 확정 후)
+
+### API 계약·스키마 (연동 비용 절감)
+
+- [ ] (권장) 프론트·Extension과 **요청/응답 필드**(`projectId`, `chatSessionId`, 에러 형식)를 한곳에 문서화 또는 OpenAPI(Swagger) 유지
+- [ ] MySQL: `ddl-auto=none` 전제 하에 **스키마 변경 반영 방식**(Flyway/Liquibase 또는 수동 SQL) 팀 합의
 
 ### 통합 테스트 (3자 연동: 프론트 + 백엔드 + Lambda)
 
@@ -399,15 +432,24 @@ event: error     → { "message": "..." }  (오류 시)
 
 - [ ] EC2 인스턴스에 IAM 역할 부여 (`lambda:InvokeFunction`, RDS 접근 등)
 - [ ] `SPRING_PROFILES_ACTIVE=prod` + 모든 필수 환경변수 주입
+- [ ] (권장) 시크릿은 **SSM Parameter Store / Secrets Manager** 등으로 관리할지 합의 (EC2 env만 쓸 경우 회전·유출 대응 문서화)
 - [ ] `application-prod.properties` 기준 `ddl-auto=none` 확인 (스키마 직접 관리)
 - [ ] RDS MySQL 보안 그룹 — EC2에서 3306 인바운드 허용
 - [ ] MongoDB Atlas Network Access — EC2 IP 추가
 - [ ] HTTPS 설정 (ALB SSL 인증서 또는 nginx + Let's Encrypt)
+- [ ] (권장) 로드밸런서·모니터링용 **헬스체크** 엔드포인트 및 노출 범위(보안 설정) 정리
+- [ ] (권장) 애플리케이션 로그·Lambda 로그를 **CloudWatch** 등으로 수집할지 합의 (장애 시 추적)
+
+### 운영·아키텍처 인지 (선택, 발표·확장 시 유리)
+
+- [ ] Rate limiting: 현재 `bucket4j` **인메모리** — EC2 **단일 인스턴스** 전제인지 문서/운영에 명시 (스케일 아웃 시 한도 의미가 달라짐)
+- [ ] RDS·Atlas **백업/복구** 정책 확인 (졸작 범위에서 최소한 스냅샷 여부만이라도)
+- [ ] 비용·쿼터: Lambda 호출 빈도, Atlas·RDS 사양 대략 상한 인지
 
 ### 기능 보강 (선택)
 
-- [ ] 블로그 `GET /{blogId}` 에서 `visibility=PRIVATE`일 때 본인만 조회 가능하도록 서비스 레이어에 검증 추가 (현재 URL상 공개이나 서비스 내부 제한 여부 확인 필요)
-- [ ] 퀴즈 생성·수정·삭제 권한 검토 (현재 `authenticated`이나 관리자 역할 구분 없음)
+- [ ] 블로그 `GET /{blogId}` 에서 `visibility=PRIVATE`일 때 본인만 조회 가능하도록 서비스 레이어에 검증 추가 (위 “보안·권한”과 중복 시 한 번만 수행)
+- [ ] 퀴즈 생성·수정·삭제 권한 검토 (위 “보안·권한”과 연계)
 - [ ] Extension `chatSessionId` → `projectId` 연동 흐름 정의 (Extension이 어느 시점에 프로젝트를 선택·생성하는지)
 - [ ] 채팅 히스토리 페이지네이션 (현재 전체 조회)
 - [ ] 프로젝트 파일 일괄 업로드 API (현재 한 번에 1개)
