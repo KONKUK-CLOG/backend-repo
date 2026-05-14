@@ -72,12 +72,14 @@ public class BlogController {
     /** 숫자 id 만 — {@code /generate} 등과 충돌하지 않도록 제한. */
     @GetMapping("/{blogId:\\d+}")
     public ApiResponse<BlogResponse> getBlog(@PathVariable Long blogId) {
-        return ApiResponse.success(blogService.getBlogDetail(blogId));
+        Long viewer = SecurityUtils.tryGetCurrentUserId().orElse(null);
+        return ApiResponse.success(blogService.getBlogDetail(blogId, viewer));
     }
 
     @GetMapping("/users/{userId}")
     public ApiResponse<List<BlogSummaryResponse>> getUserBlogs(@PathVariable Long userId) {
-        return ApiResponse.success(blogService.getUserBlogs(userId));
+        Long viewer = SecurityUtils.tryGetCurrentUserId().orElse(null);
+        return ApiResponse.success(blogService.getUserBlogsForProfile(userId, viewer));
     }
 
     @GetMapping("/published")
