@@ -12,7 +12,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 /**
  * MongoDB 채팅 세션 — MySQL {@code users.id} 를 {@code userId} 로 참조한다.
- * <p>60K 토큰 초과 시 요약문을 {@code systemMessage} 로 가진 새 세션으로 전환하고 이전 세션은 ARCHIVED.</p>
+ * <p>컨텍스트 토큰 한도 초과 시 요약 후 이전 세션·메시지는 삭제하고 {@code systemMessage} 를 담은 새 세션으로 전환한다.</p>
  */
 @Getter
 @Setter
@@ -26,6 +26,9 @@ public class ChatSession {
     private String id;
 
     private Long userId;
+
+    /** 같은 유저 내 프로젝트 단위 활성 세션 구분(null 이면 프로젝트 미연동·레거시). */
+    private String projectId;
 
     private ChatSessionStatus status;
 

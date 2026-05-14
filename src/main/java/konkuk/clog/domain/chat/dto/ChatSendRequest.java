@@ -18,6 +18,11 @@ public class ChatSendRequest {
     /** 없으면 서버가 활성 세션을 찾거나 새로 만든다. */
     private String chatSessionId;
 
+    /**
+     * 프로젝트 단위 활성 세션 구분 — null 이면 projectId 없는(레거시) 세션만 사용·생성.
+     */
+    private String projectId;
+
     @NotBlank
     private String message;
 

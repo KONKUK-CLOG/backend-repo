@@ -30,6 +30,7 @@ public class LlmController {
         Long userId = SecurityUtils.requireCurrentUserId();
         ChatSendRequest chat = new ChatSendRequest();
         chat.setChatSessionId(request.getChatSessionId());
+        chat.setProjectId(request.getProjectId());
         chat.setMessage(request.getMessage());
         chat.setCodeSnippets(request.getCodeSnippets());
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);

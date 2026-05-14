@@ -3,9 +3,9 @@ package konkuk.clog.domain.chat.service;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import konkuk.clog.domain.chat.document.ChatMessage;
 import konkuk.clog.domain.chat.document.ChatSession;
 import konkuk.clog.domain.chat.domain.ChatRole;
@@ -18,17 +18,20 @@ import konkuk.clog.domain.chat.repository.ChatSessionRepository;
 import konkuk.clog.domain.llm.dto.LambdaChatTurn;
 import konkuk.clog.domain.llm.dto.LambdaPayload;
 import konkuk.clog.domain.llm.dto.LambdaResult;
+import konkuk.clog.domain.llm.dto.ProjectFileContext;
 import konkuk.clog.domain.llm.service.LlmService;
+import konkuk.clog.domain.project.repository.ProjectFileRepository;
 import konkuk.clog.global.exception.BusinessException;
 import konkuk.clog.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * 채팅 세션 생명주기, 토큰 한도 초과 시 요약·세션 전환, Lambda 호출 및 SSE 이벤트 순서(reasoning → markdown → done).
+ * 채팅 세션 생명주기, 토큰 한도 초과 시 요약·세션 교체(이전 세션·메시지 삭제), Lambda 호출 및 SSE.
  */
 @Service
 @RequiredArgsConstructor
@@ -37,14 +40,16 @@ public class ChatService {
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final LlmService llmService;
+    private final ProjectFileRepository projectFileRepository;
 
-    @Value("${app.chat.max-context-tokens:60000}")
+    @Value("${app.chat.max-context-tokens:100000}")
     private int maxContextTokens;
 
     @Transactional(readOnly = true)
-    public ChatHistoryResponse loadActiveHistory(Long userId) {
+    public ChatHistoryResponse loadActiveHistory(Long userId, String projectId) {
+        String pid = normalizeProjectId(projectId);
         ChatSession session = chatSessionRepository
-                .findByUserIdAndStatus(userId, ChatSessionStatus.ACTIVE)
+                .findByUserIdAndProjectIdAndStatus(userId, pid, ChatSessionStatus.ACTIVE)
                 .orElse(null);
         if (session == null) {
             return ChatHistoryResponse.of(null, List.of());
@@ -55,17 +60,16 @@ public class ChatService {
     }
 
     /**
-     * 유저 메시지 저장 → (필요 시) 요약 후 세션 회전 → Lambda GENERATE → SSE 스트리밍 → 어시스턴트 메시지 저장.
-     * <p>이벤트 순서: {@code reasoning} → {@code markdown} → {@code done} (플랜 UX).</p>
-     * <p>Mongo 단일 문서 저장 위주라 긴 트랜잭션은 사용하지 않는다.</p>
+     * 유저 메시지 저장 → (필요 시) 요약 후 세션 교체 → Lambda GENERATE → SSE → 어시스턴트 메시지 저장.
      */
     public void streamChatAndSendSse(Long userId, ChatSendRequest request, SseEmitter emitter) {
         try {
-            ChatSession resolved = resolveSession(userId, request.getChatSessionId());
+            ChatSession resolved = resolveSession(userId, request);
             maybeRotateSessionForTokenBudget(userId, resolved, request.getMessage(), request.getCodeSnippets());
 
+            String pid = normalizeProjectId(request.getProjectId());
             ChatSession session = chatSessionRepository
-                    .findByUserIdAndStatus(userId, ChatSessionStatus.ACTIVE)
+                    .findByUserIdAndProjectIdAndStatus(userId, pid, ChatSessionStatus.ACTIVE)
                     .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_SESSION_NOT_FOUND));
 
             Instant now = Instant.now();
@@ -132,24 +136,31 @@ public class ChatService {
         emitter.send(SseEmitter.event().name(eventName).data(data));
     }
 
-    private ChatSession resolveSession(Long userId, String chatSessionId) {
-        if (chatSessionId != null && !chatSessionId.isBlank()) {
-            ChatSession s = chatSessionRepository.findById(chatSessionId)
+    private ChatSession resolveSession(Long userId, ChatSendRequest request) {
+        String reqProjectId = normalizeProjectId(request.getProjectId());
+        if (request.getChatSessionId() != null && !request.getChatSessionId().isBlank()) {
+            ChatSession s = chatSessionRepository.findById(request.getChatSessionId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_SESSION_NOT_FOUND));
             if (!s.getUserId().equals(userId) || s.getStatus() != ChatSessionStatus.ACTIVE) {
                 throw new BusinessException(ErrorCode.CHAT_SESSION_NOT_FOUND);
             }
+            if (reqProjectId != null) {
+                if (!Objects.equals(reqProjectId, normalizeProjectId(s.getProjectId()))) {
+                    throw new BusinessException(ErrorCode.CHAT_SESSION_NOT_FOUND);
+                }
+            }
             return s;
         }
         return chatSessionRepository
-                .findByUserIdAndStatus(userId, ChatSessionStatus.ACTIVE)
-                .orElseGet(() -> createFreshSession(userId));
+                .findByUserIdAndProjectIdAndStatus(userId, reqProjectId, ChatSessionStatus.ACTIVE)
+                .orElseGet(() -> createFreshSession(userId, reqProjectId));
     }
 
-    private ChatSession createFreshSession(Long userId) {
+    private ChatSession createFreshSession(Long userId, String projectId) {
         Instant now = Instant.now();
         ChatSession s = ChatSession.builder()
                 .userId(userId)
+                .projectId(projectId)
                 .status(ChatSessionStatus.ACTIVE)
                 .systemMessage(null)
                 .totalTokenCount(0)
@@ -160,7 +171,7 @@ public class ChatService {
     }
 
     /**
-     * 새 유저 입력을 넣기 전에 합산 토큰이 한도를 넘기면, 기존 대화를 Lambda 로 요약하고 새 ACTIVE 세션으로 교체한다.
+     * 합산 토큰이 한도를 넘기면 Lambda SUMMARIZE 후 이전 세션·메시지를 삭제하고 요약을 systemMessage 로 가진 새 세션으로 교체한다.
      */
     private void maybeRotateSessionForTokenBudget(
             Long userId,
@@ -194,13 +205,13 @@ public class ChatService {
             throw new BusinessException(ErrorCode.LLM_RESPONSE_PARSE_FAILED);
         }
 
-        session.setStatus(ChatSessionStatus.ARCHIVED);
-        session.setUpdatedAt(Instant.now());
-        chatSessionRepository.save(session);
+        String oldSessionId = session.getId();
+        String projectIdForNew = session.getProjectId();
 
         Instant now = Instant.now();
         ChatSession fresh = ChatSession.builder()
                 .userId(userId)
+                .projectId(projectIdForNew)
                 .status(ChatSessionStatus.ACTIVE)
                 .systemMessage(sumResult.getSummary())
                 .totalTokenCount(estimateTokens(sumResult.getSummary(), null))
@@ -208,6 +219,9 @@ public class ChatService {
                 .updatedAt(now)
                 .build();
         chatSessionRepository.save(fresh);
+
+        chatMessageRepository.deleteBySessionId(oldSessionId);
+        chatSessionRepository.deleteById(oldSessionId);
     }
 
     private List<LambdaChatTurn> buildTurnsFromSession(ChatSession session, List<ChatMessage> messages) {
@@ -237,16 +251,29 @@ public class ChatService {
         List<ChatMessage> messages =
                 chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(session.getId());
         List<LambdaChatTurn> turns = buildTurnsFromSession(session, messages);
+
+        List<ProjectFileContext> projectFiles = List.of();
+        if (StringUtils.hasText(session.getProjectId())) {
+            projectFiles = projectFileRepository.findAllByProjectIdOrderByFilePathAsc(session.getProjectId()).stream()
+                    .map(f -> ProjectFileContext.builder()
+                            .filePath(f.getFilePath())
+                            .language(f.getLanguage())
+                            .content(f.getContent())
+                            .build())
+                    .toList();
+        }
+
         return LambdaPayload.builder()
                 .action("GENERATE")
                 .userId(userId)
                 .chatHistory(turns)
                 .codeSnippets(request.getCodeSnippets())
                 .prompt(request.getMessage())
+                .projectFiles(projectFiles.isEmpty() ? null : projectFiles)
                 .build();
     }
 
-    /** 대략적 토큰 수(영문 기준 문자/4 근사 — 한글은 더 짧게 잡힐 수 있음). */
+    /** 대략적 토큰 수(영문 기준 문자/4 근사). */
     private int estimateTokens(String text, List<CodeSnippet> snippets) {
         int n = text != null ? text.length() / 4 : 0;
         if (snippets == null) {
@@ -258,5 +285,12 @@ public class ChatService {
             }
         }
         return Math.max(n, 1);
+    }
+
+    static String normalizeProjectId(String projectId) {
+        if (projectId == null || projectId.isBlank()) {
+            return null;
+        }
+        return projectId.trim();
     }
 }
